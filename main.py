@@ -4,15 +4,12 @@ from joblib import dump, load
 import pandas as pd
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-# Naive Bayes Approach
 from sklearn.naive_bayes import MultinomialNB
-# Trees Approach
 from sklearn.tree import DecisionTreeClassifier
-# Ensemble Approach
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 import seaborn as sn
 import matplotlib.pyplot as plt
-
+from sklearn.preprocessing import LabelEncoder  # New import for encoding
 
 class DiseasePrediction:
     # Initialize and Load the Config File
@@ -26,16 +23,32 @@ class DiseasePrediction:
 
         # Verbose
         self.verbose = self.config['verbose']
-        # Load Training Data
+        
+        # Load and preprocess Training Data
         self.train_features, self.train_labels, self.train_df = self._load_train_dataset()
-        # Load Test Data
+        self.train_df = self.preprocess_data(self.train_df)  # Apply preprocessing
+        
+        # Load and preprocess Test Data
         self.test_features, self.test_labels, self.test_df = self._load_test_dataset()
+        self.test_df = self.preprocess_data(self.test_df)  # Apply preprocessing
+        
         # Feature Correlation in Training Data
         self._feature_correlation(data_frame=self.train_df, show_fig=False)
+        
         # Model Definition
         self.model_name = model_name
-        # Model Save Path
         self.model_save_path = self.config['model_save_path']
+
+    # Preprocessing Function
+    def preprocess_data(self, data_frame):
+        # Initialize LabelEncoder
+        le = LabelEncoder()
+        
+        # Convert categorical columns to numeric
+        for col in data_frame.select_dtypes(include=['object']).columns:
+            data_frame[col] = le.fit_transform(data_frame[col])
+        
+        return data_frame
 
     # Function to Load Train Dataset
     def _load_train_dataset(self):
@@ -45,7 +58,6 @@ class DiseasePrediction:
         train_features = df_train[cols]
         train_labels = df_train['prognosis']
 
-        # Check for data sanity
         assert (len(train_features.iloc[0]) == 132)
         assert (len(train_labels) == train_features.shape[0])
 
@@ -63,7 +75,6 @@ class DiseasePrediction:
         test_features = df_test[cols]
         test_labels = df_test['prognosis']
 
-        # Check for data sanity
         assert (len(test_features.iloc[0]) == 132)
         assert (len(test_labels) == test_features.shape[0])
 
@@ -110,22 +121,14 @@ class DiseasePrediction:
 
     # ML Model
     def train_model(self):
-        # Get the Data
         X_train, y_train, X_val, y_val = self._train_val_split()
         classifier = self.select_model()
-        # Training the Model
         classifier = classifier.fit(X_train, y_train)
-        # Trained Model Evaluation on Validation Dataset
         confidence = classifier.score(X_val, y_val)
-        # Validation Data Prediction
         y_pred = classifier.predict(X_val)
-        # Model Validation Accuracy
         accuracy = accuracy_score(y_val, y_pred)
-        # Model Confusion Matrix
         conf_mat = confusion_matrix(y_val, y_pred)
-        # Model Classification Report
         clf_report = classification_report(y_val, y_pred)
-        # Model Cross Validation Score
         score = cross_val_score(classifier, X_val, y_val, cv=3)
 
         if self.verbose:
@@ -136,13 +139,11 @@ class DiseasePrediction:
             print('\nCross Validation Score: \n', score)
             print('\nClassification Report: \n', clf_report)
 
-        # Save Trained Model
         dump(classifier, str(self.model_save_path + self.model_name + ".joblib"))
 
     # Function to Make Predictions on Test Data
     def make_prediction(self, saved_model_name=None, test_data=None):
         try:
-            # Load Trained Model
             clf = load(str(self.model_save_path + saved_model_name + ".joblib"))
         except Exception as e:
             print("Model not found...")
@@ -158,13 +159,9 @@ class DiseasePrediction:
 
 
 if __name__ == "__main__":
-    # Model Currently Training
     current_model_name = 'decision_tree'
-    # Instantiate the Class
     dp = DiseasePrediction(model_name=current_model_name)
-    # Train the Model
     dp.train_model()
-    # Get Model Performance on Test Data
     test_accuracy, classification_report = dp.make_prediction(saved_model_name=current_model_name)
     print("Model Test Accuracy: ", test_accuracy)
     print("Test Data Classification Report: \n", classification_report)
